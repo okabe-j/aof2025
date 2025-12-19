@@ -9,7 +9,7 @@ let ( <--. ) = Bits.( <--. )
 (*let sample_input_values = [(0, 68); (0, 30); (1, 48); (0, 5); (1, 60); (0, 55); (0, 1); (0, 99); (1, 14); (0, 82)]*)
 (*let sample_input_values = [0; 0; 0; 0; 68; 0; 0; 0; 0; 30; 1; 0; 0; 0; 48; 0; 0; 0; 0; 5; 1; 0; 0; 0; 60; 0; 0; 0; 0; 55; 0xFF]*)
 (*let sample_input_values = [0; 0; 0; 0; 49; 0xFF]*)
-(*let sample_input_values = String.to_list "L68\nL30\nR48\nL5\nR60\nL55\nL100\x04"*)
+(*let sample_input_values = String.to_list "L68\nL30\nR48\nL5\nR60\nL55\nL1\nL99\nR14\nL82\nL200\nR200\x04"*)
 let sample_input_values = String.to_list (In_channel.read_all "/Users/jiamingzhao/Documents/hardcaml/aof2025/test/testcase/day01.txt") @ ['\x04']
 
 let simple_testbench (sim : Harness.Sim.t) =

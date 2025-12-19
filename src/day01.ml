@@ -26,7 +26,8 @@ module Loader = struct
     type 'a t =
       { valid_out : 'a
       ; direction : 'a
-      ; number : 'a [@bits num_width]
+      ; circles : 'a [@bits num_width]
+      ; offset : 'a [@bits num_width]
       ; last: 'a
       }
     [@@deriving hardcaml]
@@ -48,15 +49,19 @@ module Loader = struct
     let%hw   shreg = reg_fb spec ~width:(num_buffered_byte * 8)
                 ~f:(fun x -> mux2 (eol ||: eof) (zero (width x)) 
                             (mux2 number_valid (drop_top ~width:8 (x @: uart_in.value)) x)) in
-    let     number = reg spec ~enable:(eol ||: eof) ((uresize ~width:num_width shreg.:[3, 0]) +: 
+    let     offset = reg spec ~enable:(eol ||: eof) ((uresize ~width:num_width shreg.:[3, 0]) +: 
                             (mux2 (counter >:. 1) 
                               (mul_10 (uresize ~width:num_width shreg.:[11, 8])) 
                               (zero num_width) )) in
+    let    circles = reg spec ~enable:(eol ||: eof)
+                            (mux2 (counter >:. 2) 
+                              (uresize ~width:num_width shreg.:[19, 16]) 
+                              (zero num_width)) in
 
     let valid_out = reg spec (eol ||: (eof &&: (counter >:. 0))) in
     let last = reg spec eof in 
     {
-      valid_out; number; direction; last
+      valid_out; offset; direction; circles; last
     }
   ;;
   let hierarchical scope =
@@ -71,7 +76,8 @@ module I = struct
     ; clear : 'a
     ; valid_in : 'a
     ; direction : 'a
-    ; number : 'a [@bits num_width]
+    ; circles : 'a [@bits num_width]
+    ; offset : 'a [@bits num_width]
     ; last: 'a
     }
   [@@deriving hardcaml]
@@ -81,21 +87,22 @@ module O = struct
   type 'a t =
     { 
       valid_out : 'a 
-    ; count : 'a [@bits output_width]
+    ; result : 'a [@bits output_width]
     }
   [@@deriving hardcaml]
 end
 
-let create scope (i : _ I.t) : _ O.t
+(* 
+let create scope ({clock; clear; valid_in; direction; offset; last; _} : _ I.t) : _ O.t
   =
-  let spec = Reg_spec.create ~clock:i.clock ~clear:i.clear () in
+  let spec = Reg_spec.create ~clock ~clear () in
   let open Always in 
-  let%hw signed_number = mux2 i.direction i.number (~:(i.number) +: (of_unsigned_int ~width:32 1)) in
+  let%hw signed_offset = mux2 direction offset (~:offset +: (of_unsigned_int ~width:32 1)) in
   let%hw_var dial = Variable.reg spec 
   	~width: num_width 
   	~clear_to: (of_signed_int ~width:num_width 50) 
-    ~enable: i.valid_in in 
-  let%hw dial_next = dial.value +: signed_number in
+    ~enable: valid_in in 
+  let%hw dial_next = dial.value +: signed_offset in
   compile [
     dial <-- dial_next;
   	when_ (dial_next <+. 0) [
@@ -105,12 +112,40 @@ let create scope (i : _ I.t) : _ O.t
   		dial <-- dial_next -:. 100
   	]
   ];
-  let valid_in_d = reg spec i.valid_in in
+  let valid_in_d = reg spec valid_in in
   let counter = reg_fb spec ~width: output_width 
   	~enable: ((dial.value ==:. 0) &: (valid_in_d)) 
   	~f: (fun d -> d +:. 1) in
-  let valid_out = pipeline spec ~n:2 i.last in
-  {valid_out; count = counter}
+  let valid_out = pipeline spec ~n:2 last in
+  {valid_out; result = counter}
+;;
+*)
+let create scope ({clock; clear; valid_in; direction; circles; offset; last} : _ I.t) : _ O.t
+  =
+  let spec = Reg_spec.create ~clock ~clear () in
+  let open Always in 
+  let%hw signed_offset = mux2 direction offset (~:offset +: (of_unsigned_int ~width:32 1)) in
+  let%hw_var dial = Variable.reg spec 
+    ~width: num_width 
+    ~clear_to: (of_signed_int ~width:num_width 50) 
+    ~enable: valid_in in 
+  let%hw dial_next = dial.value +: signed_offset in
+  compile [
+    dial <-- dial_next;
+    when_ (dial_next <+. 0) [
+    dial <-- dial_next +:. 100
+    ] ;
+    when_ (dial_next >=+. 100) [
+      dial <-- dial_next -:. 100
+    ]
+  ];
+  let advance_counter = ((dial.value <>:. 0) &&: ((dial_next <=:. 0) ||: (dial_next >=:. 100))) in
+  let counter = reg_fb spec ~width:output_width 
+    ~enable: valid_in
+    ~f: (fun d -> d +: (uresize ~width:output_width circles) +: 
+      (mux2 advance_counter (of_unsigned_int ~width:(width d) 1) (zero (width d)))) in
+  let valid_out = reg spec last in
+  {valid_out; result = counter}
 ;;
 
 let hierarchical scope =

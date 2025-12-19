@@ -38,5 +38,55 @@ let shift_out ~clock ~clear ?(ready = vdd) (signal : _ With_valid.t) =
                   (mux2 (counter >:. 0) (sll x ~by:8) x))
   in
   let valid = (counter >:. 0) in
-  { With_valid.valid; value = shreg.:[(width shreg)-1 , (width shreg)-8] }
+  { With_valid.valid; value = shreg.:[(width shreg)-1 , (width shreg)-8]}
 ;;
+
+(*
+module Shift_Out = struct
+  module I = struct
+    type 'a t =
+      { clock   : 'a
+      ; clear   : 'a
+      ; valid   : 'a
+      ; result  : 'a [@bits output_width]
+      }
+    [@@deriving hardcaml]
+  end
+
+  module O = struct
+    type 'a t =
+      { 
+        uart_data : 'a Byte_with_valid.t
+      }
+    [@@deriving hardcaml]
+  end
+
+  let create scope ({clock; clear; valid; result} : _ I.t) : _ O.t
+    = 
+    let spec = Reg_spec.create ~clock ~clear () in    
+    let%tydi { q = fifo_out; full = fifo_full; empty = fifo_empty; _ } =
+      Fifo.create
+        ~showahead:true
+        ~scope:(Scope.sub_scope scope "fifo")
+        ~capacity:8
+        ~overflow_check:true
+        ~underflow_check:true
+        ~clock
+        ~clear
+        ~wr:valid
+        ~d:result
+        ~rd:fifo_rd
+        ()
+    in
+    let counter =
+      reg_fb spec ~width:(num_bits_to_represent (output_width / 8)) ~f:(fun x ->
+        mux2 valid_in (of_unsigned_int ~width:(width x) n)
+        (mux2 (x >:. 0) (x -:. 1) (zero (width x))))
+    in        
+  ;;
+  let hierarchical scope =
+    let module Scoped = Hierarchy.In_scope (I) (O) in
+    Scoped.hierarchical ~scope ~name:"shift_out" create
+  ;;
+end
+*)

@@ -25,13 +25,13 @@ end
 
 let create scope ({ clock; clear; uart_in } : _ I.t) : _ O.t
   =
-  let%tydi { valid_out = loader_valid; direction; number; last } = 
+  let%tydi { valid_out = loader_valid; direction; circles; offset; last } = 
     Day01.Loader.hierarchical scope { clock; clear; uart_in }
   in
-  let%tydi { valid_out = algo_valid; count } = 
-    Day01.hierarchical scope { clock; clear; valid_in = loader_valid; direction; number; last }
+  let%tydi { valid_out = algo_valid; result } = 
+    Day01.hierarchical scope { clock; clear; valid_in = loader_valid; direction; circles; offset; last }
   in
-  let uart_out = Util.shift_out ~clock ~clear { valid = algo_valid; value = count } in
+  let uart_out = Util.shift_out ~clock ~clear { valid = algo_valid; value = result } in
   { uart_out }
 ;;
 
