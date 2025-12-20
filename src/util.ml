@@ -41,6 +41,27 @@ let shift_out ~clock ~clear ?(ready = vdd) (signal : _ With_valid.t) =
   { With_valid.valid; value = shreg.:[(width shreg)-1 , (width shreg)-8]}
 ;;
 
+let mul_10 = fun x -> (sll x ~by:3) +: (sll x ~by:1)
+
+let bcd_to_binary ~clock ~clear ~output_width (signal : _ With_valid.t) =
+  assert((width signal.value) > 0 && (width signal.value) % 4 = 0);
+  let spec = Reg_spec.create ~clock ~clear () in
+  let digits = (width signal.value) / 4 in
+  let counter = reg_fb spec ~width:(num_bits_to_represent digits)
+      ~f:(fun x -> mux2 signal.valid (of_unsigned_int ~width:(width x) digits) 
+                  (mux2 (x >:. 0) (x -:. 1) (zero (width x)) )) in
+  let buf = reg_fb spec ~width:(width signal.value) 
+      ~f:(fun x -> mux2 signal.valid signal.value 
+                  (mux2 (counter >:. 0) (sll x ~by:4) (zero (width x)))) in
+
+  let acc = reg_fb spec ~width:output_width 
+      ~f:(fun x -> mux2 (counter >:. 0) 
+                  ((mul_10 x) +: (uresize ~width:output_width buf.:[(width buf) - 1, (width buf) - 4])) 
+                  (zero (width x)) ) in
+  let valid = reg spec (counter ==:. 1) in
+  { With_valid.valid; value = acc }
+;;
+
 (*
 module Shift_Out = struct
   module I = struct

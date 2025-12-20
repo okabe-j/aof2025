@@ -10,7 +10,6 @@ let num_width    = 32
 let output_width = 64
 let ascii_eof    = (of_unsigned_int ~width:8 4)
 let term         = (of_string "11111111")
-let mul_10       = fun x -> (sll x ~by:3) +: (sll x ~by:1)
 
 module Loader = struct
   module I = struct
@@ -51,7 +50,7 @@ module Loader = struct
                             (mux2 number_valid (drop_top ~width:8 (x @: uart_in.value)) x)) in
     let     offset = reg spec ~enable:(eol ||: eof) ((uresize ~width:num_width shreg.:[3, 0]) +: 
                             (mux2 (counter >:. 1) 
-                              (mul_10 (uresize ~width:num_width shreg.:[11, 8])) 
+                              (Util.mul_10 (uresize ~width:num_width shreg.:[11, 8])) 
                               (zero num_width) )) in
     let    circles = reg spec ~enable:(eol ||: eof)
                             (mux2 (counter >:. 2) 

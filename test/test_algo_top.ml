@@ -6,11 +6,10 @@ open! Aof2025
 module Harness = Cyclesim_harness.Make (Algo_top.I) (Algo_top.O)
 
 let ( <--. ) = Bits.( <--. )
-(*let sample_input_values = [(0, 68); (0, 30); (1, 48); (0, 5); (1, 60); (0, 55); (0, 1); (0, 99); (1, 14); (0, 82)]*)
-(*let sample_input_values = [0; 0; 0; 0; 68; 0; 0; 0; 0; 30; 1; 0; 0; 0; 48; 0; 0; 0; 0; 5; 1; 0; 0; 0; 60; 0; 0; 0; 0; 55; 0xFF]*)
-(*let sample_input_values = [0; 0; 0; 0; 49; 0xFF]*)
 (*let sample_input_values = String.to_list "L68\nL30\nR48\nL5\nR60\nL55\nL1\nL99\nR14\nL82\nL200\nR200\x04"*)
-let sample_input_values = String.to_list (In_channel.read_all "/Users/jiamingzhao/Documents/hardcaml/aof2025/test/testcase/day01.txt") @ ['\x04']
+(*let sample_input_values = String.to_list (In_channel.read_all "/Users/jiamingzhao/Documents/hardcaml/aof2025/test/testcase/day01.txt") @ ['\x04']*)
+(*let sample_input_values = String.to_list "987654321111111\n811111111111119\n234234234234278\n818181911112111\x04"*)
+let sample_input_values = String.to_list (In_channel.read_all "/Users/jiamingzhao/Documents/hardcaml/aof2025/test/testcase/day03.txt") @ ['\x04']
 
 let simple_testbench (sim : Harness.Sim.t) =
   let inputs = Cyclesim.inputs sim in
@@ -25,6 +24,7 @@ let simple_testbench (sim : Harness.Sim.t) =
     inputs.uart_in.valid := Bits.gnd;
     cycle ()
   in
+
 
   let rec get_output n = 
     if (n = 0) 
@@ -46,11 +46,10 @@ let simple_testbench (sim : Harness.Sim.t) =
   cycle ();
 
   List.iter sample_input_values ~f:(fun x -> feed_byte_input x);
-
   let result_list = get_output 8 in 
   let result_number = List.fold_left result_list ~f:(fun acc b -> (acc lsl 8) lor b) ~init:0 in
   print_s [%message "Result" (result_number : int)];
-  cycle ~n:2 ()
+  cycle ~n:100 ()
 ;;
 
 let waves_config =
