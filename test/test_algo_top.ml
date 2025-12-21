@@ -10,7 +10,7 @@ let ( <--. ) = Bits.( <--. )
 (*let sample_input_values = String.to_list (In_channel.read_all "/Users/jiamingzhao/Documents/hardcaml/aof2025/test/testcase/day01.txt") @ ['\x04']*)
 (*let sample_input_values = String.to_list "987654321111111\n811111111111119\n234234234234278\n818181911112111\x04"*)
 (*let sample_input_values = String.to_list (In_channel.read_all "/Users/jiamingzhao/Documents/hardcaml/aof2025/test/testcase/day03.txt") @ ['\x04']*)
-let sample_input_values = String.to_list (In_channel.read_all "/Users/jiamingzhao/Documents/hardcaml/aof2025/test/testcase/day04_1.txt") @ ['\x04']
+let sample_input_values = String.to_list (In_channel.read_all "/Users/jiamingzhao/Documents/hardcaml/aof2025/test/testcase/day04_2.txt") @ ['\x04']
 
 let simple_testbench (sim : Harness.Sim.t) =
   let inputs = Cyclesim.inputs sim in

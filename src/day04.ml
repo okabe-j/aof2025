@@ -44,11 +44,12 @@ module Loader = struct
     				(mux2 roll (drop_top ~width:1 (x @: (uart_in.value ==: (of_char '@')))) x)) in
     let%hw shreg_valid = eol ||: eof in
 
-    let last = reg spec eof in
-    let valid_out = shreg_valid ||: last ||: (roll &&: (count ==:. 1)) in
+    let pad1 = reg spec eof in
+    let pad2 = reg spec pad1 in
+    let valid_out = shreg_valid ||: pad1 ||: pad2 in
     let row = mux2 shreg_valid (sll ~by:1 shreg) (zero (width shreg)) in
 
-    {valid_out; row; count; last}
+    {valid_out; row; count; last = pad2}
   ;;
   let hierarchical scope =
     let module Scoped = Hierarchy.In_scope (I) (O) in
@@ -88,14 +89,14 @@ let create scope ({clock; clear; valid_in; row; last; _} : _ I.t) : _ O.t
     let%hw row_count = reg_fb spec ~width:count_width ~enable:valid_in ~f:(fun x -> x +:. 1) in
 
     let%hw_list n_1   = List.init (row_width - 2) ~f:(fun x -> x + 1) |> 
-    		  List.map ~f:(fun x -> mux2 (r.:(x) ==: gnd) (zero 4) 
-    		  	(popcount (prev_r.:[x + 1, x - 1] @: r.:[x + 1, x - 1] @: next_r.:[x + 1, x - 1])) ) in
+    		  List.map ~f:(fun x -> mux2 (r.:(x) ==: gnd) (ones 4) 
+    		  	(popcount (prev_r.:[x + 1, x - 1] @: r.:(x + 1) @: r.:(x - 1) @: next_r.:[x + 1, x - 1])) ) in
     let%hw_list n_2 = 
-    		  List.map ~f:(fun x -> mux2 ((x -:. 1) <:. 4) vdd gnd) n_1 in
+    		  List.map ~f:(fun x -> mux2 (x <:. 4) vdd gnd) n_1 in
     let%hw n = 
     		  List.map ~f:(fun x -> uresize ~width:(num_bits_to_represent row_width) x) n_2 |>
     		  reduce ~f:(+:) in
-    let acc = reg_fb spec ~width:result_width ~f:(fun x -> mux2 (valid_in &&: (row_count >:. 2)) (x +: (uresize ~width:result_width n)) x) in
+    let acc = reg_fb spec ~width:result_width ~f:(fun x -> mux2 (valid_in &&: (row_count >:. 1)) (x +: (uresize ~width:result_width n)) x) in
     let valid_out = reg spec last in
     (*let valid_out = reg spec valid_in in*)
     { valid_out; result = acc }
