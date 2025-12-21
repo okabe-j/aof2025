@@ -2,8 +2,8 @@ open! Core
 open! Hardcaml
 open! Signal
 
-module Uart_115200 = Uart.Make (struct
-    let baud = 115200
+module Uart = Uart.Make (struct
+    let baud = 100000
     let clock_freq_hz = 25000000
     let rx_fifo_depth = 32
     let tx_fifo_depth = 32
@@ -29,13 +29,13 @@ end
 let create scope ({ clock; clear; uart_rx } : _ I.t) : _ O.t
   =
   let%tydi { byte_out = uart_in; _ } = 
-    Uart_115200.Rx.create scope { clock; clear; ready = vdd; rx = uart_rx }
+    Uart.Rx.create scope { clock; clear; ready = vdd; rx = uart_rx }
   in
   let%tydi { uart_out } = 
     Algo_top.hierarchical scope { clock; clear; uart_in }
   in
   let%tydi { tx = uart_tx; _ } = 
-    Uart_115200.Tx.create scope { clock; clear; byte_in = uart_out }
+    Uart.Tx.create scope { clock; clear; byte_in = uart_out }
   in
   { uart_tx }
 ;;

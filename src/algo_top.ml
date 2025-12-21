@@ -2,15 +2,11 @@ open! Core
 open! Hardcaml
 open! Signal
 
-module Byte_with_valid = With_valid.Vector (struct
-    let width = 8
-end)
-
 module I = struct
   type 'a t =
     { clock : 'a
     ; clear : 'a
-    ; uart_in : 'a Byte_with_valid.t
+    ; uart_in : 'a Uart.Byte_with_valid.t
     }
   [@@deriving hardcaml]
 end
@@ -18,13 +14,20 @@ end
 module O = struct
   type 'a t =
     { 
-      uart_out : 'a Byte_with_valid.t 
+      uart_out : 'a Uart.Byte_with_valid.t 
     }
   [@@deriving hardcaml]
 end
 
 let create scope ({ clock; clear; uart_in } : _ I.t) : _ O.t
   =
+  let%tydi { valid_out = loader_valid; row; count; last } = 
+    Day04.Loader.hierarchical scope { clock; clear; uart_in }
+  in
+  let%tydi { valid_out = algo_valid; result } = 
+    Day04.hierarchical scope { clock; clear; valid_in = loader_valid; row; count; last }
+  in
+  (* Day03
   let loader = 
     let module M = Structural_inst.Make (Day03.Loader) in
     M.create scope    
@@ -46,7 +49,8 @@ let create scope ({ clock; clear; uart_in } : _ I.t) : _ O.t
       last = loader.o.last }
   in
   loader.i.ready <-- ready;
-(*
+*)
+(* Day01
   let%tydi { valid_out = loader_valid; direction; circles; offset; last } = 
     Day01.Loader.hierarchical scope { clock; clear; uart_in }
   in

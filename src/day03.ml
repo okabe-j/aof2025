@@ -2,12 +2,8 @@ open! Core
 open! Hardcaml
 open! Signal
 
-module Byte_with_valid = With_valid.Vector (struct
-    let width = 8
-  end)
-
 let bcd_width = 4
-let num_digits = 2
+let num_digits = 12
 let result_width = 64
 let digit_count_width = 16
 
@@ -16,7 +12,7 @@ module Loader = struct
     type 'a t =
       { clock : 'a
       ; clear : 'a
-      ; uart_in : 'a Byte_with_valid.t
+      ; uart_in : 'a Uart.Byte_with_valid.t
       ; ready: 'a
       }
     [@@deriving hardcaml]
@@ -42,23 +38,23 @@ module Loader = struct
     let counting_done = reg_fb spec ~width:1 ~f:(fun x -> mux2 eol vdd x) in
     let count = reg_fb spec ~width:digit_count_width ~f:(fun x -> mux2 ((~: counting_done) &&: (number_valid)) (x +:. 1) x) in
 
-	let%tydi { q = fifo_out; empty = fifo_empty; _ } =
-	  Fifo.create
-	    ~showahead:true
-	    ~scope:(Scope.sub_scope scope "fifo")
-	    ~capacity:1024
-	    ~overflow_check:true
-	    ~underflow_check:true
-        ~clock
-	    ~clear
-	    ~wr:number_valid
-	    ~d:uart_in.value.:[3, 0]
-	    ~rd:ready
-	    ()
-	in
-	let valid_out = ((~: fifo_empty) &&: counting_done) in
-	let last_received = reg_fb spec ~width:1 ~f:(fun x -> mux2 eof vdd (mux2 fifo_empty gnd x)) in
-	{valid_out; bcd = fifo_out; count; last = (last_received &&: fifo_empty) }
+  	let%tydi { q = fifo_out; empty = fifo_empty; _ } =
+  	  Fifo.create
+  	    ~showahead:true
+  	    ~scope:(Scope.sub_scope scope "fifo")
+  	    ~capacity:1024
+  	    ~overflow_check:true
+  	    ~underflow_check:true
+          ~clock
+  	    ~clear
+  	    ~wr:number_valid
+  	    ~d:uart_in.value.:[bcd_width-1, 0]
+  	    ~rd:ready
+  	    ()
+  	in
+  	let valid_out = ((~: fifo_empty) &&: counting_done) in
+  	let last_received = reg_fb spec ~width:1 ~f:(fun x -> mux2 eof vdd (mux2 fifo_empty gnd x)) in
+  	{valid_out; bcd = fifo_out; count; last = (last_received &&: fifo_empty) }
   ;;
   let hierarchical scope =
     let module Scoped = Hierarchy.In_scope (I) (O) in
@@ -105,6 +101,10 @@ let create scope ({clock; clear; valid_in; bcd; count; last} : _ I.t) : _ O.t
   					 (valid_digits.value >:. 0) &&:
   					 (valid_digits.value +: remaining_digits >:. num_digits) in 
 
+  (* Using the shreg like a stack, smaller bcd digits at top are popped out if the input is bigger
+     However also need to make sure there'll be enough digits in shreg when approaching the end of the input line
+  *)
+
   compile [
     shreg <-- shreg_next.value;
 
@@ -139,8 +139,7 @@ let create scope ({clock; clear; valid_in; bcd; count; last} : _ I.t) : _ O.t
   let%hw acc = reg_fb spec ~width:result_width 
   	~f:(fun x -> mux2 convert_result.valid (x +: convert_result.value) x) in
 
-  (*let%hw last_received = reg_fb spec ~width:1 ~f:(fun x -> mux2 last vdd (mux2 convert_result.valid gnd x)) in
-  let%hw valid_out = reg spec (last_received &&: convert_result.valid) in*)
+  (* Give some cycles to allow bcd -> bin conversion *)
   let valid_out = pipeline spec ~n:20 last in
   {valid_out; result = acc; ready =ready.value}
 ;;

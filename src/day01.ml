@@ -2,10 +2,6 @@ open! Core
 open! Hardcaml
 open! Signal
 
-module Byte_with_valid = With_valid.Vector (struct
-    let width = 8
-  end)
-
 let num_width    = 32
 let output_width = 64
 let ascii_eof    = (of_unsigned_int ~width:8 4)
@@ -16,7 +12,7 @@ module Loader = struct
     type 'a t =
       { clock : 'a
       ; clear : 'a
-      ; uart_in : 'a Byte_with_valid.t
+      ; uart_in : 'a Uart.Byte_with_valid.t
       }
     [@@deriving hardcaml]
   end
@@ -123,6 +119,7 @@ let create scope ({clock; clear; valid_in; direction; circles; offset; last} : _
   =
   let spec = Reg_spec.create ~clock ~clear () in
   let open Always in 
+  (* Convert to 2's complement if rolling left *)
   let%hw signed_offset = mux2 direction offset (~:offset +: (of_unsigned_int ~width:32 1)) in
   let%hw_var dial = Variable.reg spec 
     ~width: num_width 
