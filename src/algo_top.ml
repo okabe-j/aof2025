@@ -21,12 +21,17 @@ end
 
 let create scope ({ clock; clear; uart_in } : _ I.t) : _ O.t
   =
+  let%tydi { valid_out = algo_valid; result } = 
+    Day06.hierarchical scope { clock; clear; uart_in }
+  in  
+  (* Day04
   let%tydi { valid_out = loader_valid; row; count; last } = 
     Day04.Loader.hierarchical scope { clock; clear; uart_in }
   in
   let%tydi { valid_out = algo_valid; result } = 
     Day04.hierarchical scope { clock; clear; valid_in = loader_valid; row; count; last }
   in
+  *)
   (* Day03
   let loader = 
     let module M = Structural_inst.Make (Day03.Loader) in
