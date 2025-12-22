@@ -39,6 +39,7 @@ let simple_testbench (sim : Harness.Sim.t) =
     )
   in
 
+
   (* Reset the design *)
   inputs.clear := Bits.vdd;
   cycle ();
@@ -49,7 +50,7 @@ let simple_testbench (sim : Harness.Sim.t) =
   let result_list = get_output 8 in 
   let result_number = List.fold_left result_list ~f:(fun acc b -> (acc lsl 8) lor b) ~init:0 in
   print_s [%message "Result" (result_number : int)];
-  cycle ~n:100 ()
+  cycle ~n:300 ()
 ;;
 
 let waves_config =
