@@ -63,7 +63,7 @@ module O = struct
   [@@deriving hardcaml]
 end
 
-
+(*
 let create scope ({clock; clear; valid_in; row; last; _} : _ I.t) : _ O.t
   =
 	let spec = Reg_spec.create ~clock ~clear () in
@@ -87,7 +87,31 @@ let create scope ({clock; clear; valid_in; row; last; _} : _ I.t) : _ O.t
 	let valid_out = reg spec last in
 	{ valid_out; result = count }
 ;;
+*)
+let create scope ({clock; clear; valid_in; row; last; _} : _ I.t) : _ O.t
+  =
+	let spec = Reg_spec.create ~clock ~clear () in
 
+	let%hw row_count = reg_fb spec ~width:16 ~enable:valid_in ~f:(fun x -> x +:. 1) in
+
+	let next_beam_weights = List.init row_width ~f:(fun _ -> wire result_width) in
+	let beam_weights = List.init row_width ~f:(fun x -> reg spec ~enable:valid_in 
+						(mux2 (row_count ==:. 0) (uresize ~width:result_width row.:(x)) (List.nth_exn next_beam_weights x))) in
+
+	List.init (row_width - 2) ~f:(fun x -> x + 1) |>
+	List.iter ~f:(fun x -> ((List.nth_exn next_beam_weights x) <-- (
+		mux2 row.:(x) (zero result_width) 
+			((List.nth_exn beam_weights x) +: 
+			(mux2 row.:(x + 1) (List.nth_exn beam_weights (x + 1)) (zero result_width)) +:
+			(mux2 row.:(x - 1) (List.nth_exn beam_weights (x - 1)) (zero result_width)))
+	)));
+	(List.nth_exn next_beam_weights 0)                <-- (zero result_width);
+	(List.nth_exn next_beam_weights (row_width - 1))  <-- (zero result_width);
+
+	let count = tree ~arity:2 beam_weights ~f:(reduce ~f:(+:)) in
+	let valid_out = reg spec last in
+	{ valid_out; result = count }
+;;
 
 let hierarchical scope =
   let module Scoped = Hierarchy.In_scope (I) (O) in
