@@ -30,17 +30,21 @@ module Loader = struct
     = 
     let spec = Reg_spec.create ~clock ~clear () in
 
-    let%hw eof   = uart_in.valid &&: (uart_in.value ==: (of_unsigned_int ~width:8 4)) in
-    let%hw comma = uart_in.valid &&: (uart_in.value ==: (of_char ',')) in
-    let%hw dash  = uart_in.valid &&: (uart_in.value ==: (of_char '-')) in
+    let%hw eof   = uart_in.valid &: (uart_in.value ==: of_unsigned_int ~width:8 4) in
+    let%hw comma = uart_in.valid &: (uart_in.value ==: of_char ',') in
+    let%hw dash  = uart_in.valid &: (uart_in.value ==: of_char '-') in
 
-    let shreg = reg_fb spec ~width:(max_digits * bcd_width) ~enable:uart_in.valid 
-    				~f:(fun x -> mux2 (comma ||: dash ||: eof) (zero (width x)) 
-    				(drop_top ~width:bcd_width (x @: (sel_bottom ~width:bcd_width uart_in.value)))) in
+    let shreg = reg_fb spec 
+    				~width:(max_digits * bcd_width) 
+    				~enable:uart_in.valid 
+    				~f:(fun x -> mux2 (comma |: dash |: eof) 
+    								  (zero @@ width x) 
+    								  (drop_top ~width:bcd_width x @: sel_bottom ~width:bcd_width uart_in.value)
+    				) in
 
     let range_begin = reg spec ~enable:dash shreg in
-    let range_end = reg spec ~enable:(comma ||: eof) shreg in
-    let valid_out = reg spec (comma ||: eof) in
+    let range_end = reg spec ~enable:(comma |: eof) shreg in
+    let valid_out = reg spec comma |: eof in
     let last = reg spec eof in
     { valid_out ; range_begin; range_end; last }
   ;;
@@ -54,22 +58,22 @@ let bcd_add_one bcd =
 	let bitmap = List.init max_digits ~f:(fun x -> bcd.:+[x * bcd_width, Some bcd_width] <>:. 9) |>
 			     concat_lsb in
 
-	let index  = (onehot_to_binary (bitmap &: (~: (bitmap -:. 1)))) @: (of_string "00") in
-	let pos    = log_shift (one (width bcd)) ~f:sll ~by:index in
-	(bcd +: pos) &: (~: (pos -:. 1))
+	let index  = (trailing_zeros bitmap) @: (of_string "00") in
+	let pos    = log_shift (one @@ width bcd) ~f:sll ~by:index in
+	(bcd +: pos) &: ~:(pos -:. 1)
 ;;
 
 
 let rec check_repeat_twice l =
 	match l with 
 	| []     -> vdd
-	| [a; b] -> (a ==: b) &&: ((sel_top a ~width:bcd_width) <>:. 0)
-	| h :: t -> (h ==: (zero (width h))) &&: (check_repeat_twice t)
+	| [a; b] -> (a ==: b) &&: (sel_top a ~width:bcd_width <>:. 0)
+	| h :: t -> (no_bits_set h) &&: (check_repeat_twice t)
 ;;  
 
 let check_bcd bcd = 
 	List.init 5 ~f:(fun x -> (x + 1) * bcd_width) |>
-	List.map ~f:(fun x -> ((split_lsb ~part_width:x ~exact:false bcd) |> List.rev |> check_repeat_twice )) |>
+	List.map ~f:(fun x -> (split_lsb ~part_width:x ~exact:false bcd |> List.rev |> check_repeat_twice )) |>
 	reduce ~f:(|:)
 ;;
 
@@ -138,12 +142,12 @@ let create scope ({clock; clear; valid_in; range_begin; range_end; last} : _ I.t
 		][
 			bcd <-- bcd_add_one bcd.value;
 			when_ (bcd.value ==: fifo_end_q) [
-				bcd 		<-- zero (width bcd.value);
+				bcd 		<--. 0;
 				bcd_valid 	<-- gnd
 			]
 		]
 	];
-	Signal.(fifo_rd <-- ((bcd.value ==: fifo_end_q) &&: (~: fifo_empty)));
+	Signal.(fifo_rd <-- ((bcd.value ==: fifo_end_q) &&: ~:fifo_empty));
 	let%hw fifo_bcd_rd = wire 1 in
 	let%hw fifo_bcd_wr = bcd_valid.value &&: (check_bcd bcd.value) in
 	let%tydi { q = fifo_bcd_q; empty = fifo_bcd_empty; _ } =
@@ -161,15 +165,17 @@ let create scope ({clock; clear; valid_in; range_begin; range_end; last} : _ I.t
 	      ()
 	in
 	let bcd_to_binary_valid = wire 1 in
-	let bin = Util.bcd_to_binary ~clock ~clear ~output_width:result_width {valid = bcd_to_binary_valid; value = fifo_bcd_q } in
-	let processing = reg_fb spec ~width:1 ~f:(fun x -> mux2 x (mux2 bin.valid gnd x) (mux2 bcd_to_binary_valid vdd x) ) in
+	let bin = Util.bcd_to_binary ~clock ~clear ~output_width:result_width 
+		{ valid = bcd_to_binary_valid; value = fifo_bcd_q } in
+	let processing = reg_fb spec ~width:1 
+		~f:(fun x -> mux2 x (mux2 bin.valid gnd x) (mux2 bcd_to_binary_valid vdd x) ) in
 	Signal.(fifo_bcd_rd <-- bin.valid);
-	Signal.(bcd_to_binary_valid <-- ((~: processing) &&: (~: fifo_bcd_empty)));
+	Signal.(bcd_to_binary_valid <-- (~: (processing ||: fifo_bcd_empty)));
 
 	let result = reg_fb spec ~width:result_width ~enable:bin.valid ~f:(fun x -> x +: bin.value) in
 	let last_received = reg spec ~enable:last vdd in
 	let valid_out_sent = wire 1 in
-	let valid_out = reg_fb spec ~width:1 ~f:(fun x -> mux2 x gnd (mux2 (last_received &&: fifo_empty &&: fifo_bcd_empty &&: (~: valid_out_sent)) vdd x)) in
+	let valid_out = reg_fb spec ~width:1 ~f:(fun x -> mux2 x gnd (mux2 (last_received &&: fifo_empty &&: fifo_bcd_empty &&: ~:valid_out_sent) vdd x)) in
 	let valid_out_sent_reg = reg spec ~enable:valid_out vdd in
 	Signal.(valid_out_sent <-- valid_out_sent_reg);
 	{ valid_out; result }
