@@ -93,7 +93,7 @@ let create scope ({clock; clear; valid_in; row; last; _} : _ I.t) : _ O.t
     		  List.map ~f:(fun x -> mux2 (r.:(x) ==: gnd) (ones 4) 
     		  	(popcount (prev_r.:[x + 1, x - 1] @: r.:(x + 1) @: r.:(x - 1) @: next_r.:[x + 1, x - 1])) ) in
     let%hw_list n_2 = 
-    		  List.map ~f:(fun x -> mux2 (x <:. 4) vdd gnd) n_1 in
+    		  List.map ~f:(fun x -> x <:. 4) n_1 in
     let%hw n = 
     		  List.map ~f:(fun x -> uresize ~width:(num_bits_to_represent row_width) x) n_2 |>
     		  reduce ~f:(+:) in
@@ -122,7 +122,7 @@ let create scope ({clock; clear; valid_in; row; last; _} : _ I.t) : _ O.t
 	let%hw_list n_list = List.init (row_width - 2) ~f:(fun x -> x + 1) |> 
 			  List.map ~f:(fun x -> mux2 (r.:(x) ==: gnd) (ones 4) 
 			  	(popcount (r_prev.:[x + 1, x - 1] @: r.:(x + 1) @: r.:(x - 1) @: r_next.:[x + 1, x - 1])) ) |>
-			  List.map ~f:(fun x -> mux2 (x <:. 4) vdd gnd) in
+			  List.map ~f:(fun x -> x <:. 4) in
 	let%hw n = 
 			  List.map ~f:(fun x -> uresize ~width:(num_bits_to_represent row_width) x) n_list |>
 			  reduce ~f:(+:) in

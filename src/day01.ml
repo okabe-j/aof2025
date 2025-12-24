@@ -38,7 +38,7 @@ module Loader = struct
     let%hw eol             = uart_in.valid &&: (uart_in.value ==: (of_char '\n')) in
     let%hw eof             = uart_in.valid &&: (uart_in.value ==: ascii_eof) in
 
-    let  direction = reg spec ~enable:direction_valid (mux2 (uart_in.value ==: (of_char 'L')) gnd vdd) in
+    let  direction = reg spec ~enable:direction_valid (uart_in.value <>: (of_char 'L')) in
     let%hw counter = reg_fb spec ~width:(num_bits_to_represent num_buffered_byte)
                 ~f:(fun x -> mux2 (eol ||: eof) (zero (width x)) (mux2 number_valid (x +:. 1) x)) in
     let%hw   shreg = reg_fb spec ~width:(num_buffered_byte * 8)
