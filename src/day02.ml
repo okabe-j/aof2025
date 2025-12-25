@@ -44,7 +44,7 @@ module Loader = struct
 
     let range_begin = reg spec ~enable:dash shreg in
     let range_end = reg spec ~enable:(comma |: eof) shreg in
-    let valid_out = reg spec comma |: eof in
+    let valid_out = reg spec (comma |: eof) in
     let last = reg spec eof in
     { valid_out ; range_begin; range_end; last }
   ;;
@@ -71,9 +71,40 @@ let rec check_repeat_twice l =
 	| h :: t -> (no_bits_set h) &&: (check_repeat_twice t)
 ;;  
 
+(*  For max_digits = 10, there are 5 cases here to check:
+	[5, 5]
+	[2, 4, 4]		<- Length = 3, first 2 digits must be unused
+	[1, 3, 3, 3]	<- Length = 4, first digit must be unused
+	[2, 2, 2, 2, 2]
+	[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+	fun check_repeat_n verifies above and removes the first element from the list when length = 3 or 4
+	fun check_repeat_n_1 verifies and removes the zero chunks from the list recursively
+	fun check_repeat_n_2 finally verifies the remaining chunks are equal (and cannot begin with digit '0')
+*)
+let check_repeat_n_2 l = 
+	(List.hd_exn l |> sel_top ~width:bcd_width <>:. 0) &:
+	(match l with
+	| [] 		-> vdd
+	| h :: t 	-> List.map ~f:(fun x -> x ==: h) t |> reduce ~f:(&:)
+	) 
+;;
+
+let rec check_repeat_n_1 l = 
+	match l with
+	| []		-> vdd
+	| [_]       -> gnd
+	| h :: t 	-> mux2 (no_bits_set h) (check_repeat_n_1 t) (check_repeat_n_2 @@ h :: t)
+
+let check_repeat_n l = 
+	match List.length l with
+	| 3  -> (no_bits_set @@ List.hd_exn l) &: (check_repeat_n_1 @@ List.tl_exn l) 
+	| 4  -> (no_bits_set @@ List.hd_exn l) &: (check_repeat_n_1 @@ List.tl_exn l)
+	| _  -> check_repeat_n_1 l
+;;
+
 let check_bcd bcd = 
 	List.init 5 ~f:(fun x -> (x + 1) * bcd_width) |>
-	List.map ~f:(fun x -> (split_lsb ~part_width:x ~exact:false bcd |> List.rev |> check_repeat_twice )) |>
+	List.map ~f:(fun x -> (split_lsb ~part_width:x ~exact:false bcd |> List.rev |> check_repeat_n )) |>
 	reduce ~f:(|:)
 ;;
 
