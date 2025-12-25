@@ -21,12 +21,20 @@ end
 
 let create scope ({ clock; clear; uart_in } : _ I.t) : _ O.t
   =
+  let%tydi {range_begin; range_end; range_valid; id; id_valid; last } = 
+    Day05.Loader.hierarchical scope { clock; clear; uart_in }
+  in
+  let%tydi { valid_out = algo_valid; result } = 
+    Day05.hierarchical scope { clock; clear; range_begin; range_end; range_valid; id; id_valid; last }
+  in   
+  (*
   let%tydi { valid_out = loader_valid; range_begin; range_end; last } = 
     Day02.Loader.hierarchical scope { clock; clear; uart_in }
   in
   let%tydi { valid_out = algo_valid; result } = 
     Day02.hierarchical scope { clock; clear; valid_in = loader_valid; range_begin; range_end; last }
-  in    
+  in 
+  *)   
   (* Day07
   let%tydi { valid_out = loader_valid; row; last } = 
     Day07.Loader.hierarchical scope { clock; clear; uart_in }
