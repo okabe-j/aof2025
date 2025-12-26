@@ -25,7 +25,6 @@ struct
   module I = struct
     type 'a t =
       { clock : 'a
-      ; clear : 'a
       ; uart_rx : 'a
       }
     [@@deriving hardcaml]
@@ -39,8 +38,13 @@ struct
     [@@deriving hardcaml]
   end
 
-  let create scope ({ clock; clear; uart_rx } : _ I.t) : _ O.t
+  let create scope ({ clock; uart_rx } : _ I.t) : _ O.t
     =
+    (* Generate a clear signal upon startup *)
+    let spec = Reg_spec.create ~clock () in
+    let clear_counter = reg_fb spec ~width:8 ~f:(fun x -> mux2 ~:x.:(7) (x +:. 1) x) in
+    let clear = ~:(clear_counter.:(7)) in
+
     let%tydi { byte_out = uart_in; _ } = 
       Uart.Rx.create scope { clock; clear; ready = vdd; rx = uart_rx }
     in

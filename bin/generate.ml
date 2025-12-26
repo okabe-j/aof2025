@@ -2,6 +2,12 @@ open! Core
 open! Hardcaml
 open! Aof2025
 
+(* Change day/part parameter to generate different design *)
+module Design_top = Design_top.Make (struct
+  let day = "day01"
+  let part = "part1"
+end)
+
 let generate_rtl () =
   let module C = Circuit.With_interface (Design_top.I) (Design_top.O) in
   let scope = Scope.create ~auto_label_hierarchical_ports:true ~flatten_design:true () in
