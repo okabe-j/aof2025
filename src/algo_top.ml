@@ -47,6 +47,16 @@ struct
       let part = part
   end)
 
+  module Day06 = Day06.Make (struct
+      let result_width = result_width
+      let part = part
+  end)
+
+  module Day07 = Day07.Make (struct
+      let result_width = result_width
+      let part = part
+  end)
+
   let create scope ({ clock; clear; uart_in } : _ I.t) : _ O.t
     =
     (*
@@ -57,67 +67,7 @@ struct
       Day05.hierarchical scope { clock; clear; range_begin; range_end; range_valid; id; id_valid; last }
     in   
     *)
-    (*
-    let%tydi { valid_out = loader_valid; range_begin; range_end; last } = 
-      Day02.Loader.hierarchical scope { clock; clear; uart_in }
-    in
-    let%tydi { valid_out = algo_valid; result } = 
-      Day02.hierarchical scope { clock; clear; valid_in = loader_valid; range_begin; range_end; last }
-    in 
-    *)   
-    (* Day07
-    let%tydi { valid_out = loader_valid; row; last } = 
-      Day07.Loader.hierarchical scope { clock; clear; uart_in }
-    in
-    let%tydi { valid_out = algo_valid; result } = 
-      Day07.hierarchical scope { clock; clear; valid_in = loader_valid; row; last }
-    in  
-    *)
-    (* Day06
-    let%tydi { valid_out = algo_valid; result } = 
-      Day06.hierarchical scope { clock; clear; uart_in }
-    in
-    *)  
-    (* Day04
-    let%tydi { valid_out = loader_valid; row; count; last } = 
-      Day04.Loader.hierarchical scope { clock; clear; uart_in }
-    in
-    let%tydi { valid_out = algo_valid; result } = 
-      Day04.hierarchical scope { clock; clear; valid_in = loader_valid; row; count; last }
-    in
-    *)
-    (* Day03
-    let loader = 
-      let module M = Structural_inst.Make (Day03.Loader) in
-      M.create scope    
-    in
-    loader.i.clock <-- clock;
-    loader.i.clear <-- clear;
-    loader.i.uart_in.valid <-- uart_in.valid;
-    loader.i.uart_in.value <-- uart_in.value;
-    (*let%tydi { valid_out = loader_valid; bcd; count; last } = 
-      Day02.Loader.hierarchical scope { clock; clear; uart_in }
-    in*)
-    let%tydi { valid_out = algo_valid; result; ready } = 
-      Day03.hierarchical scope { 
-        clock; 
-        clear; 
-        valid_in = loader.o.valid_out; 
-        bcd = loader.o.bcd; 
-        count = loader.o.count; 
-        last = loader.o.last }
-    in
-    loader.i.ready <-- ready;
-  *)
-  (* Day01 *)
-  (*
-    let%tydi { valid_out = loader_valid; direction; circles; offset; last } = 
-      Day01_Inst.Loader.hierarchical scope { clock; clear; uart_in }
-    in
-    let%tydi { valid_out; result } = 
-      Day01_Inst.hierarchical scope { clock; clear; valid_in = loader_valid; direction; circles; offset; last }
-    in
-  *)
+
     let algo_valid = wire 1 in
     let algo_result = wire result_width in
     if String.equal day "day01" then (
@@ -144,6 +94,20 @@ struct
     else if String.equal day "day04" then (
       let%tydi { valid_out ; result } = 
         Day04.hierarchical scope { clock; clear; uart_in }
+      in
+      algo_valid  <-- valid_out;
+      algo_result <-- result;
+    )
+    else if String.equal day "day06" then (
+      let%tydi { valid_out ; result } = 
+        Day06.hierarchical scope { clock; clear; uart_in }
+      in
+      algo_valid  <-- valid_out;
+      algo_result <-- result;
+    )
+    else if String.equal day "day07" then (
+      let%tydi { valid_out ; result } = 
+        Day07.hierarchical scope { clock; clear; uart_in }
       in
       algo_valid  <-- valid_out;
       algo_result <-- result;

@@ -45,7 +45,7 @@ struct
       let count = reg_fb spec ~width:count_width ~enable:(~:counting_done &: roll) ~f:(fun x -> x +:. 1) in
 
       let%hw shreg = reg_fb spec ~width:row_width ~f:(fun x -> mux2 eol (zero row_width)
-      				@@ mux2 roll (drop_top ~width:1 (x @: (uart_in.value ==: of_char '@'))) x) in
+      				@@ mux2 roll (drop_top ~width:1 x @: (uart_in.value ==: of_char '@')) x) in
       let%hw shreg_valid = eol |: eof in
 
       let pad1 = reg spec eof in

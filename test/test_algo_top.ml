@@ -139,3 +139,43 @@ let%expect_test "Day04_Part2" =
   Harness.run_advanced ~waves_config ~create:Algo_top_day04_part2.hierarchical simple_testbench "day04.txt";
   [%expect {| (Result (result_number 8707)) |}]
 ;;
+
+let%expect_test "Day06_Part1" =
+  let module Algo_top_day06_part1 = Algo_top.Make (struct
+    let day           = "day06"
+    let part          = "part1"
+    let result_width  = result_width
+  end) in 
+  Harness.run_advanced ~waves_config ~create:Algo_top_day06_part1.hierarchical simple_testbench "day06.txt";
+  [%expect {| (Result (result_number 6299564383938)) |}]
+;;
+
+let%expect_test "Day06_Part2" =
+  let module Algo_top_day06_part2 = Algo_top.Make (struct
+    let day           = "day06"
+    let part          = "part2"
+    let result_width  = result_width
+  end) in 
+  Harness.run_advanced ~waves_config ~create:Algo_top_day06_part2.hierarchical simple_testbench "day06.txt";
+  [%expect {| (Result (result_number 11950004808442)) |}]
+;;
+
+let%expect_test "Day07_Part1" =
+  let module Algo_top_day07_part1 = Algo_top.Make (struct
+    let day           = "day07"
+    let part          = "part1"
+    let result_width  = result_width
+  end) in 
+  Harness.run_advanced ~waves_config ~create:Algo_top_day07_part1.hierarchical simple_testbench "day07.txt";
+  [%expect {| (Result (result_number 1566)) |}]
+;;
+
+let%expect_test "Day07_Part2" =
+  let module Algo_top_day07_part2 = Algo_top.Make (struct
+    let day           = "day07"
+    let part          = "part2"
+    let result_width  = result_width
+  end) in 
+  Harness.run_advanced ~waves_config ~create:Algo_top_day07_part2.hierarchical simple_testbench "day07.txt";
+  [%expect {| (Result (result_number 5921061943075)) |}]
+;;
