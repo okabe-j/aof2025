@@ -1,1 +1,7 @@
-bin/generate.exe
+*.exe
+*.bc
+*.svf 
+*.bit 
+*.config 
+*.ys 
+*.json
