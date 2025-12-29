@@ -24,8 +24,24 @@ icesprog design_top.bit
 The python script I use to communicate with FPGA from host side is `pyserial/serial_listener.py`
 You'll need to install below dependencies to run above commands:
 
-- Ocaml/Hardcaml: https://www.janestreet.com/web-app/hardcaml-docs/introduction/installing_with_opam
-- oss-cad-suite: https://github.com/YosysHQ/oss-cad-suite-build This includes yosys / nextpnr with ECP5 support and icesprog command for programming FPGA
-- iCESugar-Pro development board: https://github.com/wuxx/icesugar-pro
+- [Ocaml/Hardcaml](https://www.janestreet.com/web-app/hardcaml-docs/introduction/installing_with_opam)
+- [oss-cad-suite](https://github.com/YosysHQ/oss-cad-suite-build) This includes yosys / nextpnr with ECP5 support and icesprog command for programming FPGA
+- [iCESugar-Pro development board](https://github.com/wuxx/icesugar-pro)
 
 ## Overview
+
+- My goal is to implement everything on FPGA without any host side preprocessing - i.e. the ASCII input text file is pumped into FPGA as-is (however need to append a byte of EOT - ASCII \0x04) on an UART interface, and FPGA returns a signal number which is the answer of the puzzle.
+- `design_top.ml` is the top sheet, it just has a pair of UART TX/RX pin for host commuicating and a clock pin connecting to a 25MHz onboard clock source. The UART TX/RX module is pretty much borrowed from [Anish's repo](https://github.com/asinghani/advent-of-hardcaml-2024/blob/main/fpga/src/uart.ml).
+- `algo_top.ml` has a byte UART RX input interface, it instantiates the selected design based on the day/part parameter and shift out the result on a UART TX byte output interface. All design outputs a 8 byte result (uint64_t big endian). This level is also the DUT for my testbench `test_algo_top.ml`.
+
+## Puzzles
+### Day01
+### Day02
+### Day03
+### Day04
+### Day05
+### Day06
+### Day07
+### Day08
+### Day09
+### Day10
