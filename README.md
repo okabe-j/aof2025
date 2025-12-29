@@ -53,7 +53,7 @@ For each input range, FPGA iterate through all numbers between the range_begin a
 One potential enhancement I could think of is to build multiple "kernels" the handles range iteration and pattern matching in parallel, as each input range is independent. (And the FPGA still having enough resource!)
 
 ### Day03
-My solution is to use a shift register of BCD digits, it behaves pretty much like a stack. For the next digit from input, it compares with the top of the stack and smaller digits would pop / shift out from the shreg. However it also needs to make sure that there'll be enough digits in shreg when approaching the end of the input line.
+My solution is to use a shift register of BCD digits, it behaves pretty much like a stack. For the next digit from input, it compares with the top of the stack and smaller digits would pop / shift out from the shreg before it could shift in. However it also needs to make sure that there'll be enough digits in shreg when approaching the end of the input line.
 
 For part 1 the shreg holds 2 digits and for part 2 it holds 12 digits, algorithm is the same otherwise.
 
