@@ -34,6 +34,7 @@ struct
         }
       [@@deriving hardcaml]
     end
+
     let create scope ({clock; clear; uart_in} : _ I.t) : _ O.t
       = 
       let spec = Reg_spec.create ~clock ~clear () in
@@ -125,43 +126,22 @@ struct
     let%hw range_count = reg_fb spec ~width:ram_addr_width ~enable:range_valid ~f:(fun x -> x +:. 1) in
     let%hw ram_load_done  = reg spec ~enable:last vdd in
 
-    let ram_port_begin = Array.init 2 ~f:(fun _ -> { Ram_Port.address = wire ram_addr_width; write_data = wire result_width; write_enable = wire 1 }) in
-    let ram_port_end   = Array.init 2 ~f:(fun _ -> { Ram_Port.address = wire ram_addr_width; write_data = wire result_width; write_enable = wire 1 }) in
+    let ram_port = Array.init 2 ~f:(fun _ -> { Ram_Port.address = wire ram_addr_width; write_data = wire (result_width * 2); write_enable = wire 1 }) in
 
-    let ram_rdata_begin =
+    let ram_rdata =
         Ram.create
-          ~name:"ram_rbegin"
+          ~name:"ram_range"
           ~collision_mode:Read_before_write
           ~size:ram_depth
           ~write_ports:
-            (Array.map ram_port_begin ~f:(fun { address; write_data; write_enable } ->
+            (Array.map ram_port ~f:(fun { address; write_data; write_enable } ->
                { Hardcaml.Write_port.write_clock = clock
                ; write_address = address
                ; write_enable
                ; write_data
                }))          
           ~read_ports:
-            (Array.map ram_port_begin ~f:(fun { address; write_enable; _ } ->     
-              { Hardcaml.Read_port.read_clock = clock
-              ; read_address = address
-              ; read_enable = ~:write_enable
-              }))
-          ()
-    in
-    let ram_rdata_end =
-        Ram.create
-          ~name:"ram_rend"
-          ~collision_mode:Read_before_write
-          ~size:ram_depth
-          ~write_ports:
-            (Array.map ram_port_end ~f:(fun { address; write_data; write_enable } ->
-               { Hardcaml.Write_port.write_clock = clock
-               ; write_address = address
-               ; write_enable
-               ; write_data
-               }))          
-          ~read_ports:
-            (Array.map ram_port_end ~f:(fun { address; write_enable; _ } ->     
+            (Array.map ram_port ~f:(fun { address; write_enable; _ } ->     
               { Hardcaml.Read_port.read_clock = clock
               ; read_address = address
               ; read_enable = ~:write_enable
@@ -187,27 +167,24 @@ struct
             ()
       in
       let fifo_rd_r = reg spec fifo_rd in
-      let%hw range_match = (fifo_id_q >=: ram_rdata_begin.(0)) &&: (fifo_id_q <=: ram_rdata_end.(0) &&: ~:fifo_rd_r) in
 
+      let ram_rdata_range = split_lsb ~part_width:result_width ram_rdata.(0) in 
+      let%hw ram_rdata_begin = List.nth_exn ram_rdata_range 0 in
+      let%hw ram_rdata_end   = List.nth_exn ram_rdata_range 1 in
+
+      let%hw range_match = (fifo_id_q >=: ram_rdata_begin) &&: (fifo_id_q <=: ram_rdata_end &&: ~:fifo_rd_r) in
       let%hw range_addr = reg_fb spec ~width:ram_addr_width ~enable:ram_load_done 
                         ~f:(fun x -> mux2 fifo_rd (zero ram_addr_width) (x +:. 1) ) in
 
-      ram_port_begin.(0).address         <-- (mux2 ~:ram_load_done range_count range_addr);
-      ram_port_begin.(0).write_data      <-- range_begin;
-      ram_port_begin.(0).write_enable    <-- range_valid;
-      ram_port_end.(0).address           <-- (mux2 ~:ram_load_done range_count range_addr);
-      ram_port_end.(0).write_data        <-- range_end;
-      ram_port_end.(0).write_enable      <-- range_valid;  
-
+      ram_port.(0).address         <-- (mux2 ~:ram_load_done range_count range_addr);
+      ram_port.(0).write_data      <-- concat_lsb [range_begin; range_end];
+      ram_port.(0).write_enable    <-- range_valid;
       (* Port1 is unused in part1 design *)
-      ram_port_begin.(1).address         <-- (zero ram_addr_width);
-      ram_port_begin.(1).write_data      <-- (zero result_width);
-      ram_port_begin.(1).write_enable    <-- gnd;
-      ram_port_end.(1).address           <-- (zero ram_addr_width);
-      ram_port_end.(1).write_data        <-- (zero result_width);
-      ram_port_end.(1).write_enable      <-- gnd;  
+      ram_port.(1).address         <-- (zero ram_addr_width);
+      ram_port.(1).write_data      <-- (zero (result_width * 2));
+      ram_port.(1).write_enable    <-- gnd;
 
-      fifo_rd                            <-- (((range_addr ==: range_count) ||: range_match) &&: ram_load_done &&: ~:fifo_id_empty);
+      fifo_rd                      <-- (((range_addr ==: range_count) ||: range_match) &&: ram_load_done &&: ~:fifo_id_empty);
 
       let result = reg_fb spec ~width:result_width ~enable:(ram_load_done &&: range_match)
                       ~f:(fun x -> x +:. 1) in
@@ -222,15 +199,23 @@ struct
       let%hw_var ram_addr_0 = Variable.reg spec ~width:ram_addr_width in
       let%hw_var ram_addr_1 = Variable.reg spec ~width:ram_addr_width in
 
+      let ram_rdata_range_0 = split_lsb ~part_width:result_width ram_rdata.(0) in 
+      let ram_rdata_range_1 = split_lsb ~part_width:result_width ram_rdata.(1) in 
+
+      let%hw ram_rdata_begin_0 = List.nth_exn ram_rdata_range_0 0 in
+      let%hw ram_rdata_end_0   = List.nth_exn ram_rdata_range_0 1 in
+      let%hw ram_rdata_begin_1 = List.nth_exn ram_rdata_range_1 0 in
+      let%hw ram_rdata_end_1   = List.nth_exn ram_rdata_range_1 1 in
+
       (* Variables for sorting stage *)
       let%hw_var bsort_addr_outer = Variable.reg spec ~width:ram_addr_width in
       let%hw_var mem_write_enable = Variable.wire ~default:gnd () in
-      let%hw bsort_need_swap = mux2 (ram_rdata_begin.(0) ==: ram_rdata_begin.(1)) 
-                                    (ram_rdata_end.(0) >: ram_rdata_end.(1)) 
-                                    (ram_rdata_begin.(0) >: ram_rdata_begin.(1)) in
+      let%hw bsort_need_swap = mux2 (ram_rdata_begin_0 ==: ram_rdata_begin_1) 
+                                    (ram_rdata_end_0 >: ram_rdata_end_1) 
+                                    (ram_rdata_begin_0 >: ram_rdata_begin_1) in
       (* Variables for counting stage *)
-      let%hw should_count = (ram_rdata_begin.(1) >: ram_rdata_end.(0)) |: (ram_addr_1.value ==: range_count) in
-      let%hw merged_range_end = mux2 (ram_rdata_end.(0) >: ram_rdata_end.(1)) ram_rdata_end.(0) ram_rdata_end.(1) in
+      let%hw should_count = (ram_rdata_begin_1 >: ram_rdata_end_0) |: (ram_addr_1.value ==: range_count) in
+      let%hw merged_range_end = mux2 (ram_rdata_end_0 >: ram_rdata_end_1) ram_rdata_end_0 ram_rdata_end_1 in
       compile
         [ sm.switch
             [ (Ram_load, [
@@ -284,33 +269,25 @@ struct
 
       let%hw is_sorting_state = (sm.is Ram_sort_read) |: (sm.is Ram_sort_write) in
 
-      Signal.(ram_port_begin.(0).address         <-- ram_addr_0.value);
-      Signal.(ram_port_begin.(0).write_data      <-- (mux2 (sm.is Ram_load) range_begin @@
-                                                      mux2 (is_sorting_state &: bsort_need_swap) ram_rdata_begin.(1) ram_rdata_begin.(0)));
-      Signal.(ram_port_begin.(0).write_enable    <-- mem_write_enable.value);
+      Signal.(ram_port.(0).address         <-- ram_addr_0.value);
+      Signal.(ram_port.(0).write_data      <-- (mux2 (sm.is Ram_load) (concat_lsb [range_begin; range_end]) @@
+                                                mux2 is_sorting_state
+                                                     (mux2 bsort_need_swap ram_rdata.(1) ram_rdata.(0))
+                                                     (mux2 should_count    ram_rdata.(0) (concat_lsb [ram_rdata_begin_0; merged_range_end]))));
 
-      Signal.(ram_port_begin.(1).address         <-- ram_addr_1.value);
-      Signal.(ram_port_begin.(1).write_data      <-- (mux2 (sm.is Ram_load) range_begin @@
-                                                      mux2 (is_sorting_state &: bsort_need_swap) ram_rdata_begin.(0) ram_rdata_begin.(1)));
-      Signal.(ram_port_begin.(1).write_enable    <-- mem_write_enable.value);
+      Signal.(ram_port.(0).write_enable    <-- mem_write_enable.value);
 
-      Signal.(ram_port_end.(0).address           <-- ram_addr_0.value);
-      Signal.(ram_port_end.(0).write_data        <-- (mux2 (sm.is Ram_load) range_end @@
-                                                      mux2 is_sorting_state 
-                                                     (mux2 bsort_need_swap ram_rdata_end.(1) ram_rdata_end.(0)) 
-                                                     (mux2 should_count ram_rdata_end.(0) merged_range_end)));
-      Signal.(ram_port_end.(0).write_enable      <-- mem_write_enable.value);
-
-      Signal.(ram_port_end.(1).address           <-- ram_addr_1.value);
-      Signal.(ram_port_end.(1).write_data        <-- ( mux2 (sm.is Ram_load) range_end @@
-                                                       mux2 (is_sorting_state &: bsort_need_swap) ram_rdata_end.(0) ram_rdata_end.(1)));
-      Signal.(ram_port_end.(1).write_enable      <-- mem_write_enable.value);
+      Signal.(ram_port.(1).address         <-- ram_addr_1.value);
+      Signal.(ram_port.(1).write_data      <-- (mux2 (sm.is Ram_load) (concat_lsb [range_begin; range_end]) @@
+                                                mux2 (is_sorting_state &: bsort_need_swap) ram_rdata.(0) ram_rdata.(1)));
+      Signal.(ram_port.(1).write_enable    <-- mem_write_enable.value);
 
       let result = reg_fb spec ~width:result_width ~enable:((sm.is Ram_count_process) &: should_count)
-                    ~f:(fun x -> x +: (ram_rdata_end.(0) -: ram_rdata_begin.(0)) +:. 1) in
+                    ~f:(fun x -> x +: (ram_rdata_end_0 -: ram_rdata_begin_0 +:. 1)) in
 
       let valid_out = reg spec ((sm.is Ram_count_process) &: (ram_addr_1.value ==: range_count)) in
       { valid_out; result }
+
   ;;
 
   let hierarchical scope =

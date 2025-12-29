@@ -81,45 +81,27 @@ struct
     let%hw ram_wr = (eol |: eof) in
     let%hw ram_load_done = reg spec ~enable:eof vdd in
 
-    let ram_port_x = { Ram_Port.address = wire point_ram_addr_width; write_data = p_x; write_enable = ram_wr } in
-    let ram_port_y = { Ram_Port.address = wire point_ram_addr_width; write_data = p_y; write_enable = ram_wr } in
-
-    let ram_rdata_x =
+    let ram_port = { Ram_Port.address = wire point_ram_addr_width
+                   ; write_data = concat_lsb [p_x; p_y]
+                   ; write_enable = ram_wr } in
+    let ram_rdata =
         Ram.create
-          ~name:"ram_x"
+          ~name:"ram_point"
           ~collision_mode:Read_before_write
           ~size:point_ram_depth
           ~write_ports:
               [| { Hardcaml.Write_port.write_clock = clock
-               ; write_address = ram_port_x.address
-               ; write_enable  = ram_port_x.write_enable
-               ; write_data    = ram_port_x.write_data
+               ; write_address = ram_port.address
+               ; write_enable  = ram_port.write_enable
+               ; write_data    = ram_port.write_data
                }|]    
           ~read_ports: 
              [| { Hardcaml.Read_port.read_clock = clock
-              ; read_address   = ram_port_x.address
-              ; read_enable    = ~:(ram_port_x.write_enable)
+              ; read_address   = ram_port.address
+              ; read_enable    = ~:(ram_port.write_enable)
               } |]
           ()
     in
-    let ram_rdata_y =
-        Ram.create
-          ~name:"ram_y"
-          ~collision_mode:Read_before_write
-          ~size:point_ram_depth
-          ~write_ports:
-              [| { Hardcaml.Write_port.write_clock = clock
-               ; write_address = ram_port_y.address
-               ; write_enable  = ram_port_y.write_enable
-               ; write_data    = ram_port_y.write_data
-               }|]    
-          ~read_ports: 
-             [| { Hardcaml.Read_port.read_clock = clock
-              ; read_address   = ram_port_y.address
-              ; read_enable    = ~:(ram_port_y.write_enable)
-              } |]
-          ()
-    in  
 
     if String.equal part "part1" then
       let open Always in
@@ -156,14 +138,17 @@ struct
                 ])
               ]
           ];
-      Signal.(ram_port_x.address <-- (mux2 (sm.is Ram_load) point_count @@
-                                      mux2 (sm.is Ram_read_1) ram_addr_1.value ram_addr_2.value ));
-      Signal.(ram_port_y.address <-- (mux2 (sm.is Ram_load) point_count @@
-                                      mux2 (sm.is Ram_read_1) ram_addr_1.value ram_addr_2.value ));
-      let%hw point1_x = reg spec ~enable:(sm.is Ram_read_2) ram_rdata_x.(0) in
-      let%hw point1_y = reg spec ~enable:(sm.is Ram_read_2) ram_rdata_y.(0) in
-      let%hw point2_x = ram_rdata_x.(0) in (* Valid at Compute_area *)
-      let%hw point2_y = ram_rdata_y.(0) in
+
+      Signal.(ram_port.address <-- (mux2 (sm.is Ram_load) point_count @@
+                                    mux2 (sm.is Ram_read_1) ram_addr_1.value ram_addr_2.value ));
+
+      let point1 = split_lsb ~part_width:number_width @@ reg spec ~enable:(sm.is Ram_read_2) ram_rdata.(0) in
+      let point2 = split_lsb ~part_width:number_width ram_rdata.(0) in (* Valid at Compute_area *)
+
+      let point1_x = List.nth_exn point1 0 in
+      let point1_y = List.nth_exn point1 1 in
+      let point2_x = List.nth_exn point2 0 in 
+      let point2_y = List.nth_exn point2 1 in 
 
       let%hw max_x = mux2 (point1_x >: point2_x) point1_x point2_x in
       let%hw min_x = mux2 (point1_x <: point2_x) point1_x point2_x in
@@ -229,17 +214,17 @@ struct
               ]
           ];
 
-      Signal.(ram_port_x.address <-- (mux2 (sm.is Ram_load) point_count @@
-                                      mux2 (sm.is Ram_read_p1) ram_addr_p1.value @@
-                                      mux2 (sm.is Ram_read_p2) ram_addr_p2.value ram_addr_l.value ));
-      Signal.(ram_port_y.address <-- (mux2 (sm.is Ram_load) point_count @@
-                                      mux2 (sm.is Ram_read_p1) ram_addr_p1.value @@
-                                      mux2 (sm.is Ram_read_p2) ram_addr_p2.value ram_addr_l.value ));
+      Signal.(ram_port.address <-- (mux2 (sm.is Ram_load) point_count @@
+                                    mux2 (sm.is Ram_read_p1) ram_addr_p1.value @@
+                                    mux2 (sm.is Ram_read_p2) ram_addr_p2.value ram_addr_l.value ));
 
-      let%hw point1_x = reg spec ~enable:(sm.is Ram_read_p2) ram_rdata_x.(0) in
-      let%hw point1_y = reg spec ~enable:(sm.is Ram_read_p2) ram_rdata_y.(0) in
-      let%hw point2_x = reg spec ~enable:(sm.is Compute_area) ram_rdata_x.(0) in
-      let%hw point2_y = reg spec ~enable:(sm.is Compute_area) ram_rdata_y.(0) in
+      let%hw_list point1 = split_lsb ~part_width:number_width @@ reg spec ~enable:(sm.is Ram_read_p2) ram_rdata.(0) in
+      let%hw_list point2 = split_lsb ~part_width:number_width @@ reg spec ~enable:(sm.is Compute_area) ram_rdata.(0) in
+
+      let point1_x = List.nth_exn point1 0 in
+      let point1_y = List.nth_exn point1 1 in
+      let point2_x = List.nth_exn point2 0 in 
+      let point2_y = List.nth_exn point2 1 in       
 
       let%hw max_x = mux2 (point1_x >: point2_x) point1_x point2_x in
       let%hw min_x = mux2 (point1_x <: point2_x) point1_x point2_x in
@@ -248,10 +233,13 @@ struct
 
       let%hw area = uresize ~width:result_width ((max_x -: min_x +:. 1) *: (max_y -: min_y +:. 1)) in
 
-      let%hw loaded_p2_x = reg spec ~enable:(sm.is Check_valid) ram_rdata_x.(0) in
-      let%hw loaded_p2_y = reg spec ~enable:(sm.is Check_valid) ram_rdata_y.(0) in
-      let%hw loaded_p1_x = ram_rdata_x.(0) in
-      let%hw loaded_p1_y = ram_rdata_y.(0) in
+      let%hw_list loaded_p2 = split_lsb ~part_width:number_width @@ reg spec ~enable:(sm.is Check_valid) ram_rdata.(0) in
+      let%hw_list loaded_p1 = split_lsb ~part_width:number_width ram_rdata.(0) in
+
+      let loaded_p2_x = List.nth_exn loaded_p2 0 in
+      let loaded_p2_y = List.nth_exn loaded_p2 1 in
+      let loaded_p1_x = List.nth_exn loaded_p1 0 in 
+      let loaded_p1_y = List.nth_exn loaded_p1 1 in    
 
       let%hw max_line_x = mux2 (loaded_p1_x >: loaded_p2_x) loaded_p1_x loaded_p2_x in
       let%hw min_line_x = mux2 (loaded_p1_x <: loaded_p2_x) loaded_p1_x loaded_p2_x in
