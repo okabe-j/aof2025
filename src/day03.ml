@@ -19,7 +19,6 @@ struct
         { clock : 'a
         ; clear : 'a
         ; uart_in : 'a Uart.Byte_with_valid.t
-        ; ready : 'a
         }
       [@@deriving hardcaml]
     end
@@ -34,7 +33,7 @@ struct
       [@@deriving hardcaml]
     end
 
-    let create scope ({clock; clear; uart_in; ready} : _ I.t) : _ O.t
+    let create scope ({ clock; clear; uart_in } : _ I.t) : _ O.t
       = 
       let spec = Reg_spec.create ~clock ~clear () in
       let%hw number_valid    = uart_in.valid &: ((uart_in.value >=: of_char '0') &: (uart_in.value <=: of_char '9')) in 
@@ -43,7 +42,7 @@ struct
 
       let counting_done = reg spec ~enable:eol vdd in
       let count = reg_fb spec ~width:digit_count_width ~enable:(~:counting_done &: number_valid) ~f:(fun x -> x +:. 1) in
-
+      let fifo_rd = wire 1 in
     	let%tydi { q = fifo_out; empty = fifo_empty; _ } =
     	  Fifo.create
     	    ~showahead:true
@@ -55,12 +54,13 @@ struct
     	    ~clear
     	    ~wr:number_valid
     	    ~d:(sel_bottom ~width:bcd_width uart_in.value)
-    	    ~rd:ready
+    	    ~rd:fifo_rd
     	    ()
     	in
     	let valid_out = (~:fifo_empty &: counting_done) in
-    	let last_received = reg_fb spec ~width:1 ~f:(fun x -> mux2 eof vdd @@ mux2 fifo_empty gnd x) in
-    	{valid_out; bcd = fifo_out; count; last = (last_received &: fifo_empty) }
+      fifo_rd <-- valid_out;
+      let last = reg spec eof in
+      { valid_out; bcd = fifo_out; count; last }
     ;;
     let hierarchical scope =
       let module Scoped = Hierarchy.In_scope (I) (O) in
@@ -90,33 +90,26 @@ struct
     =
     let spec = Reg_spec.create ~clock ~clear () in
 
-    let loader = 
-      let module M = Structural_inst.Make (Loader) in
-      M.create scope    
+    let%tydi { valid_out = valid_in; bcd; count; last } = 
+        Loader.hierarchical scope { clock; clear; uart_in }
     in
-    loader.i.clock <-- clock;
-    loader.i.clear <-- clear;
-    loader.i.uart_in.valid <-- uart_in.valid;
-    loader.i.uart_in.value <-- uart_in.value;
-
-    let valid_in = loader.o.valid_out in
-    let bcd      = loader.o.bcd in
-    let count    = loader.o.count in
-    let last     = loader.o.last in
 
     let open Always in 
-    let %hw_var shreg        = Variable.reg spec ~width:(num_digits * bcd_width) in
+    let %hw_var shreg        = Variable.reg spec ~width:(num_digits * bcd_width) ~clear_to:(ones (num_digits * bcd_width)) in
     let %hw_var shreg_next   = Variable.wire ~default:shreg.value () in
     let %hw_var valid_digits = Variable.reg spec ~width:digit_count_width in
-    let         ready        = Variable.wire ~default:gnd () in
-    let %hw processed_digits = reg_fb spec ~width:digit_count_width ~enable:(valid_in &: ready.value)
+    let %hw processed_digits = reg_fb spec ~width:digit_count_width ~enable:valid_in
     	~f:(fun x -> mux2 ((x +:. 1) ==: count) (zero digit_count_width) (x +:. 1)) in
     let %hw remaining_digits = (count -: processed_digits) in
     let %hw should_drop = ((sel_bottom ~width:bcd_width shreg.value) >=: bcd) &:
     					(valid_digits.value ==:. num_digits) in
-    let %hw should_shift = ((sel_bottom ~width:bcd_width shreg.value) <: bcd) &:
-    					 (valid_digits.value >:. 0) &:
-    					 (valid_digits.value +: remaining_digits >:. num_digits) in 
+
+    let %hw max_pop_count_1 = List.init num_digits ~f:(fun x -> shreg.value.:+[x * bcd_width, Some 4] <: bcd) |>
+                              concat_lsb |> popcount |> uresize ~width:digit_count_width in
+    let %hw max_pop_count_2 = valid_digits.value +: remaining_digits -:. num_digits in
+
+    let %hw pop_count       = mux2 (max_pop_count_1 <: max_pop_count_2) max_pop_count_1 max_pop_count_2 in
+    let %hw pop_bits        = sll ~by:2 pop_count in
 
     (* Using the shreg like a stack, smaller bcd digits at top are popped out if the input is bigger
        However also need to make sure there'll be enough digits in shreg when approaching the end of the input line
@@ -127,30 +120,28 @@ struct
 
     	when_ (valid_in) [
      		if_ (should_drop) [
-     			ready <-- vdd;
           when_ (remaining_digits ==:. 1) [
               valid_digits <--. 0;
-              shreg        <--. 0
+              shreg        <-- ones (num_digits * bcd_width)
           ]
      		][
-    	 		if_ (should_shift) [
-    	  			shreg_next   <-- srl ~by:bcd_width shreg.value;
-    	  			valid_digits <-- valid_digits.value -:. 1
+    	 		if_ (pop_count >:. 0) [
+    	  			shreg_next   <-- drop_top ~width:bcd_width (log_shift shreg.value ~f:srl ~by:pop_bits |: 
+                                 log_shift (ones @@ width shreg.value) ~f:sll ~by:((of_unsigned_int ~width:(width pop_bits) (width shreg.value)) -: pop_bits)) @: bcd;
+    	  			valid_digits <-- valid_digits.value -: (uresize ~width:digit_count_width pop_count) +:. 1
     	  		][
     	  			shreg_next   <-- drop_top ~width:bcd_width (shreg.value @: bcd);
     	  			valid_digits <-- valid_digits.value +:. 1;
-    	  			ready        <-- vdd;
-              when_ (remaining_digits ==:. 1) [
-                  valid_digits <--. 0;
-                  shreg        <--. 0
-              ]
-    	  		]
+    	  		];
+          when_ (remaining_digits ==:. 1) [
+            valid_digits <--. 0;
+            shreg        <-- ones (num_digits * bcd_width) 
+          ]
      		]
       ]
     ];
-    Signal.(loader.i.ready <-- ready.value);
     
-    let%hw should_convert = valid_in &: ready.value &: (remaining_digits ==:. 1) in
+    let%hw should_convert = valid_in &: (remaining_digits ==:. 1) in
     let    convert_result = Util.bcd_to_binary ~clock ~clear ~output_width:result_width 
       {valid = should_convert; value = shreg_next.value} in 
 
