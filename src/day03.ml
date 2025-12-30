@@ -104,6 +104,8 @@ struct
     let %hw should_drop = ((sel_bottom ~width:bcd_width shreg.value) >=: bcd) &:
     					(valid_digits.value ==:. num_digits) in
 
+    (* max_pop_count_1: maximum num of digits can be popped based on comparing with incoming digit
+       max_pop_count_2: maximum num of digits can be popped considering we still need to fill shreg with remaining digits *)
     let %hw max_pop_count_1 = List.init num_digits ~f:(fun x -> shreg.value.:+[x * bcd_width, Some 4] <: bcd) |>
                               concat_lsb |> popcount |> uresize ~width:digit_count_width in
     let %hw max_pop_count_2 = valid_digits.value +: remaining_digits -:. num_digits in
