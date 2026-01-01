@@ -51,7 +51,6 @@ struct
       = 
       let spec = Reg_spec.create ~clock ~clear () in
 
-      (*let%hw eol  = uart_in.valid &: (uart_in.value ==: of_char '\n') in*)
       let%hw eof  = uart_in.valid &: (uart_in.value ==: of_unsigned_int ~width:8 4) in
       let%hw light_done    = uart_in.valid &: (uart_in.value ==: of_char ']') in
       let%hw wires_done    = uart_in.valid &: (uart_in.value ==: of_char '{') in
@@ -347,11 +346,23 @@ struct
       let%hw_var valid_joltages_count = Variable.reg spec ~width:(num_bits_to_represent joltages_count) in
       let%hw     max_joltages_count = ~:(log_shift ~f:sll ~by:valid_joltages_count.value @@ ones joltages_count) in
 
+      (* In Process_pattern state, we apply "presses" to joltages based on the pattern and the result is processed_joltages.
+         There are 5 possible scenarios.
+         1 -> processed_joltages becomes all zero after pressing, this means we found a solution. it is captured by joltage_process_done signal
+         2 -> the presses combination is invalid (i.e. some joltage becomes negative after pressing), it means the pattern is invalid and we should skip, 
+              it is captured by is_pattern_valid signal
+         3 -> the presses combination is valid however there are remaining joltages after the pressing and we need to further handle the child case.
+              This is captured by need_push_stack signal
+         4 -> We are returning from a child case and the stack just popped, we need to update the min_press_count accordingly.
+              This is captured by ret_valid signal
+         5 -> All possible patterns for the current joltages level has been processed, and we are pointing at "zero" pattern sentinel. 
+              This means we should return to parent case and update the final result when sp is already 0 
+      *)
+
       let%hw_list processed_joltages = List.init joltages_count ~f:(fun _ -> wire data_width) in
       let%hw_list joltages = List.init joltages_count ~f:(
                               fun x -> reg_fb spec 
                                               ~width:data_width 
-                                             (* ~enable:(sm.is Done |: sm.is Load_joltages |: sm.is Push_stack |: sm.is) *)
                                               ~f:(fun y -> mux2 (sm.is Done) (zero data_width) @@ 
                                                            mux2 (sm.is Load_joltages &: (valid_joltages_count.value ==:. x)) data @@
                                                            mux2 (sm.is Push_stack) (List.nth_exn processed_joltages x) @@
