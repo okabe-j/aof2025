@@ -58,8 +58,24 @@ My solution is to use a shift register of BCD digits, it behaves pretty much lik
 For part 1 the shreg holds 2 digits and for part 2 it holds 12 digits, algorithm is the same otherwise.
 
 ### Day04
+FPGA encodes the grid into a bitmap ('.' -> GND, '@' -> VDD) and pad an extra row/column of GND around the grid to make processing easier. Then it runs a 3 level pipeline that caches the adjecent 3 grid rows and checks the 8 bits around each bit in the middle row. 
+
+**Part 1:** Just need to count the paper rolls for each bit position. I found out the popcount/reduce function fit this purpose nicely.
+
+**Part 2:** The grid needs to be processed with multiple passes. For each pass the rows are updated with the new value and feed into a FIFO. The algo stops when there is no update in a certain pass.
+
 ### Day05
+**Part 1:** The idea is to store the ranges into a memory and for each id, it checks all memory entries to see if there is a match.
+
+**Part 2:** The memory entries are sorted using bubble sort algorithm and then adjacent memory entries are "merged" if they are overlapping with each other. 
+
+I found the RTL inference of TDP memory on yosys ECP5 flow is extremely picky - for part 2 I struggled quite a bit but still cannot get the TDP memory reliably inferred. The algo could be re-writed with single port memory but I decided to not spend more time here - for all the later puzzles I use a single port memory whenever memory inference is needed.
+
 ### Day06
+**Part 1:** The input numbers are converted into binary and partial compute results are pushed into FIFOs as each row coming into FPGA. Given we only know the operator in the last row, both multiplication and addtition are computed beforehand so we can simply mux between them based on the operator.
+
+**Part 2:** A FIFO entry is created for each digit/ASCII character in a row and the partial number (multiply by 10 and add) are computed as each row coming into FPGA. The last row that has the operator triggers the final multiplication / addition computation.
+
 ### Day07
 ### Day08
 ### Day09
