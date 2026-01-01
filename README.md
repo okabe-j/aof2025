@@ -80,3 +80,6 @@ I found the RTL inference of TDP memory on yosys ECP5 flow is extremely picky - 
 ### Day08
 ### Day09
 ### Day10
+**Part 1:** Note that press the same button twice cancels the effect, so we only need to try press bottons at most once. It also means we want to try out all the possible combinations of the buttons. The combinations of n numbers can be represented by bitmap (0 ... 2^n-1). I have a signal wire_comb loops through these value and the result is checked/updated on the fly.
+
+**Part 2:** This is hard. I've adopted the method discussed in https://www.reddit.com/r/adventofcode/comments/1pk87hl/2025_day_10_part_2_bifurcate_your_way_to_victory/. In short, all the possible press combinations that can reach a certain pattern is pre-computed and stored into a memory, after that we search all the possible cases to reach the joltages level. The method itself involves recursive function so I had to design a "stack" in FPGA to save the temporary state when we are searching through the child cases. Tooked me a while to debug and make sure the algo handles all the edge cases, but glad that it worked in the end :)
