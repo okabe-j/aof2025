@@ -100,15 +100,15 @@ struct
     						(mux2 (row_count ==:. 0) (uresize ~width:result_width row.:(x)) (List.nth_exn next_beam_weights x))) in
 
       (* Unfortunately this doesn't fit on my tiny FPGA T^T *)
-    	List.init (row_width - 2) ~f:(fun x -> x + 1) |>
-    	List.iter ~f:(fun x -> ((List.nth_exn next_beam_weights x) <-- (
-    		mux2 row.:(x) (zero result_width) 
-    			((List.nth_exn beam_weights x) +: 
-    			(mux2 row.:(x + 1) (List.nth_exn beam_weights (x + 1)) (zero result_width)) +:
-    			(mux2 row.:(x - 1) (List.nth_exn beam_weights (x - 1)) (zero result_width)))
-    	)));
-    	(List.nth_exn next_beam_weights 0)                <-- (zero result_width);
-    	(List.nth_exn next_beam_weights (row_width - 1))  <-- (zero result_width);
+      List.iteri next_beam_weights ~f:(fun i x -> 
+          if (i = 0) || (i = row_width - 1) then 
+            x <-- (zero result_width)
+          else
+            x <-- (mux2 row.:(i) (zero result_width) 
+                                ((List.nth_exn beam_weights i) +: 
+                                  (mux2 row.:(i + 1) (List.nth_exn beam_weights (i + 1)) (zero result_width)) +:
+                                  (mux2 row.:(i - 1) (List.nth_exn beam_weights (i - 1)) (zero result_width))))
+      );
 
     	let count = tree ~arity:2 beam_weights ~f:(reduce ~f:(+:)) in
     	let valid_out = reg spec last in
