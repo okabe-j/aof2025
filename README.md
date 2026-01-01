@@ -77,8 +77,16 @@ I found the RTL inference of TDP memory on yosys ECP5 flow is extremely picky - 
 **Part 2:** A FIFO entry is created for each digit/ASCII character in a row and the partial number (multiply by 10 and add) are computed as each row coming into FPGA. The last row that has the operator triggers the final multiplication / addition computation.
 
 ### Day07
+**Part 1:** Somewhat similar to Day4 - the input is encoded into bitmap and processed row by row with some kernel function. 
+
+**Part 2:** We need a list of registers to record the "weight" of the light at each column index. This solution is synthesizble with real resource usage, but unfortuately the 64bit * 150column register array doesn't fit nicely on my tiny FPGA. I can think of other solutions which use less resource by introducing a memory/FIFO, but that'd make the design rather ugly and I prefer not to implement that way. 
+
 ### Day08
 ### Day09
+**Part 1:** Quite straightforward, store the points in a memory and iterate through all pairs of points to find the largest rectangle area.
+
+**Part 2:** Need an additional validation stage to make sure the rectangle falls within the green tiles boundary. There are 2 things we want to validate: 1. The other 2 corners of the rectangle are also within the boundary. 2. No lines between red tile can intersect with the 4 edges.
+
 ### Day10
 **Part 1:** Note that press the same button twice cancels the effect, so we only need to try press bottons at most once. It also means we want to try out all the possible combinations of the buttons. The combinations of n numbers can be represented by bitmap (0 ... 2^n-1). I have a signal wire_comb loops through these value and the result is checked/updated on the fly.
 
