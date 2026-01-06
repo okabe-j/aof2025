@@ -5,3 +5,4 @@
 *.config 
 *.ys 
 *.json
+rtl/*.v
