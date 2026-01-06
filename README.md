@@ -82,6 +82,10 @@ I found the RTL inference of TDP memory on yosys ECP5 flow is extremely picky - 
 **Part 2:** We need a list of registers to record the "weight" of the light at each column index. This solution is synthesizble with real resource usage, but unfortuately the 64bit * 150column register array doesn't fit nicely on my tiny FPGA. I can think of other solutions which use less resource by introducing a memory/FIFO, but that'd make the design rather ugly and I prefer not to implement that way. 
 
 ### Day08
+For day08 I only implemented part1 partially, i.e. instead of connecting 1000 pairs of boxes I'm only able to do 100. The reason being that my FPGA is small such that I cannot keep track of 1000 shortest pairs with flops. Alternatively I can use a memory and bubble-sort-ish manner but feel like that's too complicated. 
+
+For part2 a possible way to implement is to scan the distance between the boxes multiple rounds and for each round we get the 100 shortest pair that's not already in the same circuit, repeat until all boxes are in the same circuit. I feel like this somehow need to flatten my root map after each round otherwise the linked list is chained too deep and simulation could take forever. 
+
 ### Day09
 **Part 1:** Quite straightforward, store the points in a memory and iterate through all pairs of points to find the largest rectangle area.
 
