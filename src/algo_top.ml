@@ -47,6 +47,11 @@ struct
       let part = part
   end)
 
+  module Day05 = Day05.Make (struct
+      let result_width = result_width
+      let part = part
+  end)
+
   module Day06 = Day06.Make (struct
       let result_width = result_width
       let part = part
@@ -57,17 +62,29 @@ struct
       let part = part
   end)
 
+  module Day08 = Day08.Make (struct
+      let result_width = result_width
+      let part = part
+  end)
+
+  module Day09 = Day09.Make (struct
+      let result_width = result_width
+      let part = part
+  end)
+
+  module Day10 = Day10.Make (struct
+      let result_width = result_width
+      let part = part
+  end)
+
+  module Day11 = Day11.Make (struct
+      let result_width = result_width
+      let part = part
+  end)
+
+
   let create scope ({ clock; clear; uart_in } : _ I.t) : _ O.t
     =
-    (*
-    let%tydi {range_begin; range_end; range_valid; id; id_valid; last } = 
-      Day05.Loader.hierarchical scope { clock; clear; uart_in }
-    in
-    let%tydi { valid_out = algo_valid; result } = 
-      Day05.hierarchical scope { clock; clear; range_begin; range_end; range_valid; id; id_valid; last }
-    in   
-    *)
-
     let algo_valid = wire 1 in
     let algo_result = wire result_width in
     if String.equal day "day01" then (
@@ -98,6 +115,13 @@ struct
       algo_valid  <-- valid_out;
       algo_result <-- result;
     )
+    else if String.equal day "day05" then (
+      let%tydi { valid_out ; result } = 
+        Day05.hierarchical scope { clock; clear; uart_in }
+      in
+      algo_valid  <-- valid_out;
+      algo_result <-- result;
+    )
     else if String.equal day "day06" then (
       let%tydi { valid_out ; result } = 
         Day06.hierarchical scope { clock; clear; uart_in }
@@ -112,14 +136,35 @@ struct
       algo_valid  <-- valid_out;
       algo_result <-- result;
     )
-    else (
+    else if String.equal day "day08" then (
       let%tydi { valid_out ; result } = 
-        Day02.hierarchical scope { clock; clear; uart_in }
+        Day08.hierarchical scope { clock; clear; uart_in }
       in
       algo_valid  <-- valid_out;
-      algo_result <-- result; 
-    );
-      
+      algo_result <-- result;
+    )
+    else if String.equal day "day09" then (
+      let%tydi { valid_out ; result } = 
+        Day09.hierarchical scope { clock; clear; uart_in }
+      in
+      algo_valid  <-- valid_out;
+      algo_result <-- result;
+    )
+    else if String.equal day "day10" then (
+      let%tydi { valid_out ; result } = 
+        Day10.hierarchical scope { clock; clear; uart_in }
+      in
+      algo_valid  <-- valid_out;
+      algo_result <-- result;
+    )
+    else if String.equal day "day11" then (
+      let%tydi { valid_out ; result } = 
+        Day11.hierarchical scope { clock; clear; uart_in }
+      in
+      algo_valid  <-- valid_out;
+      algo_result <-- result;
+    )
+    else raise_s [%message "Invalid day parameter"];  
     let uart_out = Util.shift_out ~clock ~clear { valid = algo_valid; value = algo_result } in
     { uart_out }
   ;;
