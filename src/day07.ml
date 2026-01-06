@@ -39,7 +39,7 @@ struct
       let%hw splitter = uart_in.valid &: ((uart_in.value ==: of_char '^') |: (uart_in.value ==: of_char 'S')) in
 
       let shreg = reg_fb spec ~width:row_width ~enable:uart_in.valid 
-      				~f:(fun x -> mux2 eol (zero row_width) (drop_top ~width:1 x @: splitter)) in
+      				~f:(fun x -> mux2 eol (zero row_width) (lsbs x @: splitter)) in
       let row = sll ~by:1 shreg in
       {valid_out = (eol |: eof); row; last = eof}
     ;;

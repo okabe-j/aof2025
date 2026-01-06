@@ -371,8 +371,8 @@ struct
                            ) in
       let%hw joltages_pattern = List.map joltages ~f:(fun x -> x.:(0)) |> concat_lsb in
 
-      let%hw_list pressed_sum  = split_lsb ~part_width:1 processing_pattern |>
-                                  List.mapi ~f:(fun i x -> split_lsb ~part_width:1 (mux2 x wires.(i) (zero data_width)) ) |>
+      let%hw_list pressed_sum  =  bits_lsb processing_pattern |>
+                                  List.mapi ~f:(fun i x -> bits_lsb @@ mux2 x wires.(i) (zero data_width) ) |>
                                   reduce ~f:(fun x y -> List.map2_exn ~f:(fun a b -> a @: b) x y) |>
                                   List.map ~f:(fun x -> uresize ~width:data_width @@ popcount x) in
       let%hw is_pattern_valid = List.map2_exn ~f:(fun x y -> x >=: y) joltages pressed_sum |> reduce ~f:(&:) in
