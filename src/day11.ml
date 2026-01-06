@@ -9,8 +9,6 @@ module Make (Config : sig
 struct
   open Config
 
-  let _part = part
-
   let num_dests = 25
 
   let hash_ram_addr_width = 15
@@ -19,6 +17,11 @@ struct
   let map_ram_data_width = num_dests * hash_ram_data_width
   let pass_ram_addr_width = map_ram_addr_width
   let pass_ram_data_width = 32
+
+  let start_nodes = if String.equal part "part1" then ["you"] else ["svr"; "fft"; "dac"]
+  let end_nodes   = if String.equal part "part1" then ["out"] else ["fft"; "dac"; "out"]
+
+  let num_cases = List.length start_nodes
 
   module I = struct
     type 'a t =
@@ -49,6 +52,7 @@ struct
       | Process_dests
       | Write_pass_ram
       | Clear_pass_ram
+      | Check_next_case
       | Output_result
       | Done
     [@@deriving sexp_of, compare ~localize, enumerate]
@@ -173,6 +177,11 @@ struct
     let%hw_var ram_clear_addr = Variable.reg spec ~width:hash_ram_addr_width in 
     let%hw_var pass_ram_clear_addr = Variable.reg spec ~width:pass_ram_addr_width in 
 
+    
+    (* Somehow this breaks the on board testing, cannot tell why from verilog code diff - simulation is fine either case *)
+    (*let%hw_var case_index = Variable.reg spec ~width:(num_bits_to_represent num_cases) in*)
+    let%hw_var case_index = Variable.reg spec ~width:8 in
+
     let%hw_var src_index  = Variable.reg spec ~width:map_ram_addr_width in
     let%hw_var dest_index = Variable.reg spec ~width:(num_bits_to_represent num_dests) in
     let%hw     dest       = mux dest_index.value (split_lsb ~part_width:hash_ram_data_width map_ram_rdata.(0)) in
@@ -187,8 +196,8 @@ struct
                                ~f:(fun x -> mux2 (sm.is Write_pass_ram) (zero pass_ram_data_width) @@
                                             mux2 (sm.is Process_dests &: (dest_index.value >:. 0)) (x +: (uresize ~width:pass_ram_data_width @@ mux ~:(flip.value) (Array.to_list pass_ram_rdata))) x) in
 
-    let start_node_hash = of_unsigned_int ~width:hash_ram_addr_width @@ get_node_hash "you" in
-    let end_node_hash = of_unsigned_int ~width:hash_ram_addr_width @@ get_node_hash "out" in
+    let start_node_hash = mux case_index.value (List.map start_nodes ~f:(fun x -> of_unsigned_int ~width:hash_ram_addr_width @@ get_node_hash x)) in
+    let end_node_hash = mux case_index.value (List.map end_nodes ~f:(fun x -> of_unsigned_int ~width:hash_ram_addr_width @@ get_node_hash x)) in
 
     let%hw start_node_index = reg spec ~enable:(sm.is Init_search3) hash_ram_rdata.(0) in
     let%hw end_node_index = reg spec ~enable:(sm.is Init_search2) hash_ram_rdata.(0) in
@@ -240,8 +249,14 @@ struct
               flip <-- ~:(flip.value);
               need_more_pass <-- gnd;
               when_ ~:(need_more_pass.value) [
-                sm.set_next Output_result
+                sm.set_next Check_next_case;
               ] 
+            ]
+          ]); (Check_next_case, [
+            sm.set_next Init_search1;
+            case_index <-- case_index.value +:. 1;
+            when_ (case_index.value ==:. (num_cases - 1)) [
+              sm.set_next Output_result
             ]
           ]); (Output_result, [
             sm.set_next Done
@@ -264,14 +279,22 @@ struct
     Signal.(map_ram_port.write_enable  <-- (sm.is Clear_ram |: eol |: eof));   
 
     Array.iteri pass_ram_port ~f:(fun i x -> (
-      Signal.(x.address               <-- (mux2 (flip.value ==:. i) src_index.value (mux2 (sm.is Clear_pass_ram) pass_ram_clear_addr.value @@ mux2 (sm.is Init_search3) end_node_index dest)));
-      Signal.(x.write_data            <-- (mux2 (flip.value ==:. i) count (mux2 (sm.is Init_search3) (one pass_ram_data_width) (zero pass_ram_data_width))));
-      Signal.(x.write_enable          <-- (mux2 (flip.value ==:. i) (sm.is Write_pass_ram) (sm.is Clear_pass_ram |: sm.is Init_search3)))
+      Signal.(x.address               <-- (mux2 (sm.is Clear_ram) (uresize ~width:pass_ram_addr_width ram_clear_addr.value) @@
+                                           mux2 (flip.value ==:. i) src_index.value @@ 
+                                           mux2 (sm.is Clear_pass_ram) pass_ram_clear_addr.value @@ 
+                                           mux2 (sm.is Init_search3) end_node_index dest));
+      Signal.(x.write_data            <-- (mux2 (sm.is Clear_ram) (zero pass_ram_data_width) @@
+                                           mux2 (flip.value ==:. i) count @@
+                                           mux2 (sm.is Init_search3) (one pass_ram_data_width) (zero pass_ram_data_width)));
+      Signal.(x.write_enable          <-- (mux2 (flip.value ==:. i) (sm.is Clear_ram |: sm.is Write_pass_ram) (sm.is Clear_ram |: sm.is Clear_pass_ram |: sm.is Init_search3)))
     ));
 
-    let%hw_list _map_ram_rdata = split_lsb ~part_width:map_ram_addr_width map_ram_rdata.(0) in
-    let%hw _hash_ram_rdata = hash_ram_rdata.(0) in
-    let%hw result = reg_fb spec ~width:result_width ~enable:(sm.is Write_pass_ram &: (src_index.value ==: start_node_index)) ~f:(fun x -> x +: uresize ~width:result_width count) in
+    let%hw case_result = reg_fb spec ~width:result_width
+                                     ~f:(fun x -> mux2 (sm.is Init_search1) (zero result_width) @@
+                                                  mux2 (sm.is Write_pass_ram &: (src_index.value ==: start_node_index)) (x +: uresize ~width:result_width count) x
+                                     ) in
+    let%hw result = reg_fb spec ~width:result_width ~clear_to:(of_unsigned_int ~width:result_width 1) ~enable:(sm.is Check_next_case)
+                                ~f:(fun x -> uresize ~width:result_width (x *: case_result)) in
     let%hw valid_out = sm.is Output_result in
     { valid_out; result }
   ;;    
