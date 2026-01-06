@@ -11,7 +11,7 @@ To trigger simulation testbench, run below command from root directory, it runs 
 dune test
 ```
 
-To generate verilog RTL, do:
+To generate verilog RTL, do: (You need to specify the day/part parameter in generate.ml to generate a specific design)
 ```
 dune build
 bin/generate.exe aof2025 > rtl/design_top.v
